@@ -9,7 +9,6 @@ Detailed analysis is at:
 
 https://docs.google.com/document/d/1dqil2g8VVNhrYTS_sEtiWTcImbsD_2yDTJBaRABj_MM/edit?usp=sharing
 
-
 Contents
 
 - Dockerfile: This file is used to build a Docker image for the project.
