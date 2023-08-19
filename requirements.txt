@@ -1,0 +1,16 @@
+fastapi[all]
+uvicorn
+pandas
+numpy
+swifter
+cleantext
+nltk
+tqdm
+gensim
+finbert-embedding
+pytorch-pretrained-bert
+sqlite-utils
+openai
+bertopic==0.15.0
+requests
+beautifulsoup4
