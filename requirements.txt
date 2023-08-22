@@ -11,6 +11,7 @@ finbert-embedding
 pytorch-pretrained-bert
 sqlite-utils
 openai
-bertopic==0.15.0
+bertopic
 requests
 beautifulsoup4
+retrying

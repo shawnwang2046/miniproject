@@ -19,20 +19,13 @@ from bertopic.representation import OpenAI
 import requests
 from finbert_embedding.embedding import FinbertEmbedding
 import openai
-
+import sqlite3
+from crud import get_topic,insert_into_topic_table,get_all_data
+from database import init_db
 
 app = FastAPI()
-db = Database("topics_db.sqlite")
-loaded_model = BERTopic.load("my_model")
+topic_model = BERTopic.load("my_model")
     
-
-
-class Topic(BaseModel):
-    id: int
-    url: str
-    body_text: str
-    topic: str
-
 def merge_sentences(paragraph: str, min_words: int = 500) -> List[str]:
     """Merge sentences in a paragraph so that each merged sentence contains at least min_words words."""
     # Tokenize the paragraph into sentences
@@ -69,7 +62,6 @@ def remove_stopwords(text: str) -> str:
     filtered_text = ' '.join(filtered_tokens)
     return filtered_text
 
-
 def extract_text_from_url(url: str) -> str:
     """Extract text from a webpage given its URL."""
     try:
@@ -79,115 +71,38 @@ def extract_text_from_url(url: str) -> str:
         response = requests.get(url, headers=headers)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
-        return " ".join([p.text for p in soup.find_all("span")])
+        #print(response.text)
+        
+        return " ".join([p.text for p in soup.find_all("p")])
     except Exception as e:
         raise Exception(str(e))
-
-
-def extract_topic(url: str) -> List[str]:
-    """Extract and clean the text from a URL, and then return paragraphs."""
-    text = extract_text_from_url(url)
-    paragraphs = merge_sentences(text)
-    cleaned_paragraphs = [remove_stopwords(paragraph) for paragraph in paragraphs]
-
-    topic_data = loaded_model.transform(cleaned_paragraphs)
-    topic_ids, weights = topic_data
-
+def get_top_topic(topic_data: List) -> int:
+    topic_ids = topic_data[0]
+    weights = topic_data[1]
+    print(topic_ids)
+    print(weights)
+    topic_weight_sum = {topic_id: 0 for topic_id in topic_ids}
     for topic_id, weight in zip(topic_ids, weights):
         topic_weight_sum[topic_id] += weight
 
-        # Sort the topic_ids based on the accumulated weights in descending order
+    # Sort the topic_ids based on the accumulated weights in descending order
     sorted_topic_ids = sorted(topic_weight_sum.keys(), key=lambda x: topic_weight_sum[x], reverse=True)
 
-        # Get the top 5 topic_ids based on the accumulated weights
-    top_5_topic_ids = sorted_topic_ids[:5]
+    top_topic_id = int(sorted_topic_ids[0])
+    return top_topic_id
+    
+def extract_topic(url: str) -> str:
+    text = extract_text_from_url(url)
+    paragraphs = merge_sentences(text)
+    paragraphs = merge_sentences(text)
+    cleaned_paragraphs = [remove_stopwords(paragraph) for paragraph in paragraphs]
+    topic_data = topic_model.transform(cleaned_paragraphs)
+    top_topic_id = get_top_topic(topic_data)
+    return get_topic(top_topic_id)
 
-    conn = sqlite3.connect('topics_db.sqlite')
-    cursor = conn.cursor()
-
-    # Create a parameterized query string
-    query = "SELECT meaningful_topic_name FROM topics WHERE Topic IN ({})".format(','.join('?' * len(top_5_topic_ids)))
-
-    # Execute the query
-    cursor.execute(query, top_5_topic_ids)
-
-    # Fetch the results
-    results = cursor.fetchall()
-
-    # Extract the topic names
-    topic_names = [result[0] for result in results]
-
-    # Close the connection
-    conn.close()
-
-    return topic_names
-
-
-
-@app.post("/extract_topic")
-async def extract_topic_from_url(url: str):
-    """
-    Extract topics from a given URL.
-
-    Args:
-        url (str): The URL to extract topics from.
-
-    Returns:
-        dict: A dictionary containing the URL and the extracted topics.
-
-    Raises:
-        HTTPException: If an error occurs while extracting topics.
-    """
-    try:
-        # Extract text
-        topics = extract_topic(url)
-
-        return {
-            "url": url,
-            "topics": topics
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/get_topic_names/")
-async def get_topic_names(topic_ids: List[int]):
-    """
-    Get meaningful topic names by topic IDs.
-
-    Args:
-        topic_ids (List[int]): A list of topic IDs.
-
-    Returns:
-        list: A list of meaningful topic names.
-    """
-    db = Database("topics_db.sqlite")
-    query = db["topics"].find(id__in=topic_ids, select=["meaningful_topic_name"])
-    result = [row["meaningful_topic_name"] for row in query]
-    return result
-
-
-@app.get("/get_articles_by_topic_id")
-async def get_articles_by_topic_id(topic_id: int):
-    """
-    Get articles by topic ID.
-
-    Args:
-        topic_id (int): The topic ID to retrieve articles for.
-
-    Returns:
-        list: A list of articles related to the given topic ID.
-    """
-    db = Database("topics_db.sqlite")
-    query = db["articles"].find(topic_ids__contains=str(topic_id))
-    articles = [row for row in query]
-    return articles
-
-@app.on_event("startup")
-async def startup_event():
-    # Read the CSV file
-    topics = pd.read_csv("topics.csv")
-
-
-    # Create a new table called 'topics' and insert the DataFrame into it
-    db["topics"].insert_all(topics.to_dict("records"), replace=True)
+@app.get("/topics")
+def read_topic(url: URL, db=Depends(get_db)):
+    topic_name = extract_topic(db, url)
+    if topic_name is None:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    return {"topic_name": topic_name}
