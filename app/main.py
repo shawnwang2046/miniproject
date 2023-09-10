@@ -8,7 +8,7 @@ import pandas as pd
 import nltk
 from bertopic import BERTopic
 import requests
-from crud import get_topic,insert_into_topic_table, get_all_data
+from crud import get_topic,insert_into_topic_table, insert_text_and_topic, get_texts_by_topic_id
 from database import init_db
 import uvicorn
 
@@ -89,7 +89,7 @@ def extract_topic(url: str) -> str:
     print(f"top_topic_id {top_topic_id}".format())
     topic_name = get_topic(top_topic_id)
     print(f"topic {topic_name}")
-    return top_topic_id, topic_name
+    return top_topic_id, topic_name, text
 
 
 def init_app():
@@ -110,11 +110,21 @@ app = FastAPI()
 def startup_event():
     init_app()
 
-@app.get("/topics")
-def read_topic(url: str):
-    top_topic_id, topic_name = extract_topic(url)
+
+@app.get("/article_from_topic_id")
+def get_article_from_topic_id(topic_id: str):
+    texts = get_texts_by_topic_id(topic_id)
+    if not texts:
+        raise HTTPException(status_code=404, detail=f"No articles found for topic_id: {topic_id}")
+    return {"texts": texts}
+
+
+@app.get("/topic_from_url")
+def get_topic_from_url(url: str):
+    top_topic_id, topic_name, text = extract_topic(url)
     if topic_name is None:
         raise HTTPException(status_code=404, detail="Topic not found")
+    insert_text_and_topic(text, top_topic_id, url)
     return {"topic_name": topic_name}
 
 if __name__ == "__main__":

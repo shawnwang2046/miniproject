@@ -27,6 +27,7 @@ def init_db():
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS text_table (
             text_id INTEGER PRIMARY KEY,
+            url TEXT,
             text TEXT,
             topic_id INTEGER,
             FOREIGN KEY (topic_id) REFERENCES topic_table (topic_id)
