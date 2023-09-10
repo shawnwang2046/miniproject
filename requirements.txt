@@ -10,8 +10,9 @@ gensim
 finbert-embedding
 pytorch-pretrained-bert
 sqlite-utils
-openai
 bertopic
 requests
 beautifulsoup4
 retrying
+pytest
+pydantic

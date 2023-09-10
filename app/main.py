@@ -1,31 +1,18 @@
 from typing import List, Tuple, Dict
 from fastapi import FastAPI, HTTPException
-from sqlite_utils import Database
 from bs4 import BeautifulSoup
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.corpus import stopwords
 import string
 import pandas as pd
-import numpy as np
-import swifter
-import cleantext
-import csv
 import nltk
-from tqdm import tqdm
-from gensim import corpora
-from gensim.models import LdaModel
 from bertopic import BERTopic
-from bertopic.representation import OpenAI
 import requests
-from finbert_embedding.embedding import FinbertEmbedding
-import openai
-import sqlite3
-from crud import get_topic,insert_into_topic_table,get_all_data
+from crud import get_topic,insert_into_topic_table, get_all_data
 from database import init_db
+import uvicorn
 
-app = FastAPI()
-topic_model = BERTopic.load("my_model")
-    
+   
 def merge_sentences(paragraph: str, min_words: int = 500) -> List[str]:
     """Merge sentences in a paragraph so that each merged sentence contains at least min_words words."""
     # Tokenize the paragraph into sentences
@@ -76,6 +63,8 @@ def extract_text_from_url(url: str) -> str:
         return " ".join([p.text for p in soup.find_all("p")])
     except Exception as e:
         raise Exception(str(e))
+    
+
 def get_top_topic(topic_data: List) -> int:
     topic_ids = topic_data[0]
     weights = topic_data[1]
@@ -94,15 +83,39 @@ def get_top_topic(topic_data: List) -> int:
 def extract_topic(url: str) -> str:
     text = extract_text_from_url(url)
     paragraphs = merge_sentences(text)
-    paragraphs = merge_sentences(text)
     cleaned_paragraphs = [remove_stopwords(paragraph) for paragraph in paragraphs]
     topic_data = topic_model.transform(cleaned_paragraphs)
     top_topic_id = get_top_topic(topic_data)
-    return get_topic(top_topic_id)
+    print(f"top_topic_id {top_topic_id}".format())
+    topic_name = get_topic(top_topic_id)
+    print(f"topic {topic_name}")
+    return top_topic_id, topic_name
+
+
+def init_app():
+    nltk.download('stopwords')
+    nltk.download('punkt')
+    nltk.download('vader_lexicon')
+    print('init db')
+    init_db()
+    global topic_model
+    topic_model = BERTopic.load("model")
+    print('topic loaded')
+    df = pd.read_csv('topics.csv')
+    insert_into_topic_table(df)
+
+app = FastAPI()
+
+@app.on_event("startup")
+def startup_event():
+    init_app()
 
 @app.get("/topics")
-def read_topic(url: URL, db=Depends(get_db)):
-    topic_name = extract_topic(db, url)
+def read_topic(url: str):
+    top_topic_id, topic_name = extract_topic(url)
     if topic_name is None:
         raise HTTPException(status_code=404, detail="Topic not found")
     return {"topic_name": topic_name}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
