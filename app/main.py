@@ -11,6 +11,7 @@ import requests
 from crud import get_topic,insert_into_topic_table, insert_text_and_topic, get_texts_by_topic_id
 from database import init_db
 import uvicorn
+from fastapi.openapi.models import OpenAPI
 
    
 def merge_sentences(paragraph: str, min_words: int = 500) -> List[str]:
@@ -111,7 +112,9 @@ def startup_event():
     init_app()
 
 
-@app.get("/article_from_topic_id")
+@app.get("/article_from_topic_id",
+         summary="Retrieve articles based on topic ID",
+         description="Given a topic ID, this endpoint retrieves associated articles from the database.")
 def get_article_from_topic_id(topic_id: str):
     texts = get_texts_by_topic_id(topic_id)
     if not texts:
@@ -119,13 +122,21 @@ def get_article_from_topic_id(topic_id: str):
     return {"texts": texts}
 
 
-@app.get("/topic_from_url")
+@app.get("/topic_from_url",
+         summary="Extract topic from a given URL",
+         description="Given a URL, this endpoint extracts the topic, saves the associated text, and returns the topic name.")
 def get_topic_from_url(url: str):
     top_topic_id, topic_name, text = extract_topic(url)
     if topic_name is None:
         raise HTTPException(status_code=404, detail="Topic not found")
     insert_text_and_topic(text, top_topic_id, url)
     return {"topic_name": topic_name}
+
+
+@app.get("/openapi.json")
+def get_openapi_schema():
+    openapi_schema = OpenAPI(**app.openapi())
+    return openapi_schema.dict()
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
